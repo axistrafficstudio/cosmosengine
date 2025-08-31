@@ -1,0 +1,10 @@
+^C:\USERS\ALVARO\DOWNLOADS\NEIGHBORDOG-MAIN\COSMOSENGINE\BUILD\CMAKEFILES\44E261284ECF5E4FE24E5D22331B7805\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine -BC:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine/build/CosmosEngine.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

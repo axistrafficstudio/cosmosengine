@@ -7,7 +7,6 @@ bool UIManager::init(GLFWwindow* window, const char* glslVersion) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     ImGui::StyleColorsDark();
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -32,7 +31,7 @@ void UIManager::endFrame() {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-bool UIManager::drawDock(SimulationSettings& s, Camera& cam, float fps, size_t particleCount) {
+bool UIManager::drawDock(SimulationSettings& s, Camera& cam, float fps, size_t particleCount, RenderingEngine* renderer) {
     bool resetRequested = false;
 
     ImGui::Begin("Cosmos Engine", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
@@ -55,6 +54,15 @@ bool UIManager::drawDock(SimulationSettings& s, Camera& cam, float fps, size_t p
     ImGui::SliderFloat("Theta", &s.theta, 0.4f, 1.2f);
     ImGui::Checkbox("Collisions", &s.collisions);
     ImGui::SliderFloat("Restitution", &s.restitution, 0.0f, 1.0f);
+    ImGui::SliderInt("Rebuild Tree Every N Frames", &s.rebuildEveryN, 1, 10);
+
+    if (renderer) {
+        ImGui::Separator();
+        float exposure = renderer->getExposure();
+        float threshold = renderer->getBloomThreshold();
+        if (ImGui::SliderFloat("Exposure", &exposure, 0.1f, 3.0f)) renderer->setExposure(exposure);
+        if (ImGui::SliderFloat("Bloom Threshold", &threshold, 0.1f, 5.0f)) renderer->setBloomThreshold(threshold);
+    }
 
     ImGui::Separator();
     ImGui::Text("Camera");

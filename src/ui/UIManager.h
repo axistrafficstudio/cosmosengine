@@ -12,7 +12,7 @@ public:
     void beginFrame();
     void endFrame();
 
-    bool drawDock(SimulationSettings& settings, Camera& camera, float fps, size_t particleCount);
+    bool drawDock(SimulationSettings& settings, Camera& camera, float fps, size_t particleCount, RenderingEngine* renderer = nullptr);
 
 private:
     bool showVectors = false;

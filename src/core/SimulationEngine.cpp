@@ -10,6 +10,7 @@ void SimulationEngine::reset(const SimulationSettings& s) {
     particles.shrink_to_fit();
     BarnesHutParams p; p.G = s.gravityG; p.softening = s.softening; p.theta = s.theta;
     bh = BarnesHut(p);
+    lastBhParams = p; frameCounter = 0; lastParticleCount = 0;
 
     switch (s.module) {
         case SimulationModule::Galaxy: initGalaxy(s.particleCount); break;
@@ -21,13 +22,19 @@ void SimulationEngine::reset(const SimulationSettings& s) {
 
 void SimulationEngine::update(const SimulationSettings& s) {
     BarnesHutParams p; p.G = s.gravityG; p.softening = s.softening; p.theta = s.theta;
-    bh = BarnesHut(p);
-    bh.build(particles);
+    bool paramsChanged = (p.G != lastBhParams.G) || (p.softening != lastBhParams.softening) || (p.theta != lastBhParams.theta);
+    bool countChanged = (particles.size() != lastParticleCount);
+    if (paramsChanged) { bh = BarnesHut(p); lastBhParams = p; }
+    if (paramsChanged || countChanged || (s.rebuildEveryN <= 1) || (frameCounter % s.rebuildEveryN == 0)) {
+        bh.build(particles);
+        lastParticleCount = particles.size();
+    }
 
     // zero forces
     for (auto& pt : particles) pt.force = glm::vec3(0.0f);
 
-    // compute forces
+    // compute forces (parallel)
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < (int)particles.size(); ++i) {
         particles[i].force = particles[i].mass * bh.computeForce(i, particles);
     }
@@ -35,12 +42,15 @@ void SimulationEngine::update(const SimulationSettings& s) {
     integrate(s);
     if (s.collisions) handleCollisions(s.restitution);
     if (s.module == SimulationModule::BlackHole) applyBlackHoleEventHorizon();
+    ++frameCounter;
 }
 
 void SimulationEngine::integrate(const SimulationSettings& s) {
     float dt = s.timeStep;
     float damp = s.damping;
-    for (auto& pt : particles) {
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < (int)particles.size(); ++i) {
+        auto& pt = particles[i];
         glm::vec3 accel = (pt.mass > 0.0f) ? (pt.force / pt.mass) : glm::vec3(0.0f);
         pt.velocity += accel * dt;
         pt.velocity *= (1.0f - damp);
@@ -56,7 +66,8 @@ void SimulationEngine::handleCollisions(float restitution) {
             float dist2 = glm::length2(r);
             float minDist = particles[i].radius + particles[j].radius;
             if (dist2 < minDist * minDist) {
-                glm::vec3 n = glm::normalize(r);
+                float dist = sqrtf(dist2) + 1e-8f;
+                glm::vec3 n = (dist > 0.0f) ? (r / dist) : glm::vec3(1,0,0);
                 float mi = particles[i].mass, mj = particles[j].mass;
                 glm::vec3 vi = particles[i].velocity;
                 glm::vec3 vj = particles[j].velocity;
@@ -66,7 +77,6 @@ void SimulationEngine::handleCollisions(float restitution) {
                 particles[i].velocity = vi - pi * mj * n * restitution;
                 particles[j].velocity = vj + pi * mi * n * restitution;
                 // separate
-                float dist = sqrtf(dist2) + 1e-6f;
                 float overlap = minDist - dist;
                 particles[i].position -= n * (overlap * (mj / (mi + mj)));
                 particles[j].position += n * (overlap * (mi / (mi + mj)));

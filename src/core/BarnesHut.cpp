@@ -124,7 +124,7 @@ glm::vec3 BarnesHut::computeForce(int i, const std::vector<Particle>& particles)
         } else {
             glm::vec3 r = node->com - pi.position;
             float dist = glm::length(r) + 1e-6f;
-            float s = node->box.halfSize.x * 2.0f; // assume cubic
+            float s = 2.0f * std::max(std::max(node->box.halfSize.x, node->box.halfSize.y), node->box.halfSize.z); // be conservative if box not cubic
             if ((s / dist) < params.theta) {
                 float dist2 = dist * dist + params.softening * params.softening;
                 float invDist = 1.0f / sqrtf(dist2);

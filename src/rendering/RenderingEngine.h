@@ -16,19 +16,33 @@ public:
     bool init(int width, int height);
     void resize(int width, int height);
     void render(const SimulationEngine& sim, const Camera& camera, bool showVectors);
+    ~RenderingEngine();
+
+    // Post-process controls
+    void setExposure(float v) { exposure = v; }
+    void setBloomThreshold(float v) { bloomThreshold = v; }
+    float getExposure() const { return exposure; }
+    float getBloomThreshold() const { return bloomThreshold; }
 
 private:
+    struct GPUVertex {
+        glm::vec3 position;
+        float radius;
+        glm::vec4 color;
+    };
     unsigned int particleVAO = 0, particleVBO = 0;
     unsigned int quadVAO = 0, quadVBO = 0;
     unsigned int hdrFBO = 0, colorTex = 0, brightTex = 0, depthRBO = 0;
     unsigned int pingpongFBO[2]{0,0}, pingpongTex[2]{0,0};
 
     ShaderProgram particleProg;
-    ShaderProgram brightProg;
     ShaderProgram blurProg;
     ShaderProgram compositeProg;
 
     int viewportW = 1, viewportH = 1;
+    float exposure = 1.2f;
+    float bloomThreshold = 1.2f;
+    std::vector<GPUVertex> gpuVertices;
 
     void setupParticleBuffers(size_t maxParticles);
     void ensureFramebuffer();

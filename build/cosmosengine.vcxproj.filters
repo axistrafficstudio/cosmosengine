@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\src\core\BarnesHut.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\src\core\SimulationEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\src\rendering\RenderingEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\src\rendering\ShaderProgram.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\src\ui\UIManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{7C44CD02-4BA5-3BB7-9E73-33C7BC0A8E1B}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,4 @@
+C:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine/build/CMakeFiles/cosmosengine.dir
+C:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine/build/CMakeFiles/copy_shaders.dir
+C:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Alvaro/Downloads/NeighborDog-main/cosmosengine/build/CMakeFiles/ZERO_CHECK.dir

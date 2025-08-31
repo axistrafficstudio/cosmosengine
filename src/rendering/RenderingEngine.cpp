@@ -2,6 +2,7 @@
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
+#include <cstdio>
 
 static const float QUAD_VERTS[] = {
     // positions   // texcoords
@@ -18,7 +19,6 @@ bool RenderingEngine::init(int width, int height) {
 
     // particle shader
     particleProg.loadFromFiles("shaders/particles.vert", "shaders/particles.frag");
-    brightProg.loadFromFiles("shaders/quad.vert", "shaders/brightpass.frag");
     blurProg.loadFromFiles("shaders/quad.vert", "shaders/gaussian_blur.frag");
     compositeProg.loadFromFiles("shaders/quad.vert", "shaders/composite.frag");
 
@@ -44,6 +44,21 @@ bool RenderingEngine::init(int width, int height) {
     return true;
 }
 
+RenderingEngine::~RenderingEngine() {
+    if (particleVBO) glDeleteBuffers(1, &particleVBO);
+    if (particleVAO) glDeleteVertexArrays(1, &particleVAO);
+    if (quadVBO) glDeleteBuffers(1, &quadVBO);
+    if (quadVAO) glDeleteVertexArrays(1, &quadVAO);
+    if (colorTex) glDeleteTextures(1, &colorTex);
+    if (brightTex) glDeleteTextures(1, &brightTex);
+    if (pingpongTex[0]) glDeleteTextures(1, &pingpongTex[0]);
+    if (pingpongTex[1]) glDeleteTextures(1, &pingpongTex[1]);
+    if (depthRBO) glDeleteRenderbuffers(1, &depthRBO);
+    if (hdrFBO) glDeleteFramebuffers(1, &hdrFBO);
+    if (pingpongFBO[0]) glDeleteFramebuffers(1, &pingpongFBO[0]);
+    if (pingpongFBO[1]) glDeleteFramebuffers(1, &pingpongFBO[1]);
+}
+
 void RenderingEngine::resize(int width, int height) {
     viewportW = width; viewportH = height;
     ensureFramebuffer();
@@ -55,19 +70,21 @@ void RenderingEngine::setupParticleBuffers(size_t maxParticles) {
 
     glBindVertexArray(particleVAO);
     glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
-    glBufferData(GL_ARRAY_BUFFER, maxParticles * sizeof(Particle), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, maxParticles * sizeof(GPUVertex), nullptr, GL_DYNAMIC_DRAW);
 
     // layout: position (vec3), radius (float), color(vec4)
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, position));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, position));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, radius));
+    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, radius));
     glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)offsetof(Particle, color));
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, color));
     glBindVertexArray(0);
 }
 
 void RenderingEngine::ensureFramebuffer() {
+    // Guard against zero-sized framebuffer (can happen before first valid resize)
+    if (viewportW <= 0 || viewportH <= 0) { viewportW = 1; viewportH = 1; }
     if (!hdrFBO) glGenFramebuffers(1, &hdrFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
 
@@ -109,6 +126,11 @@ void RenderingEngine::ensureFramebuffer() {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongTex[i], 0);
     }
 
+    // Check completeness
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        fprintf(stderr, "FBO incomplete: 0x%X (viewport %dx%d)\n", status, viewportW, viewportH);
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -122,14 +144,21 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     const auto& pts = sim.getParticles();
     if (pts.empty()) return;
 
-    // Resize particle buffer if needed
+    // Resize particle buffer if needed and upload compact GPU data
     glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
     GLint size = 0; glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
-    if ((size_t)size < pts.size() * sizeof(Particle)) {
+    size_t needed = pts.size() * sizeof(GPUVertex);
+    if ((size_t)size < needed) {
         setupParticleBuffers(pts.size());
         glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
     }
-    glBufferSubData(GL_ARRAY_BUFFER, 0, pts.size() * sizeof(Particle), pts.data());
+    gpuVertices.resize(pts.size());
+    for (size_t i = 0; i < pts.size(); ++i) {
+        gpuVertices[i].position = pts[i].position;
+        gpuVertices[i].radius = pts[i].radius;
+        gpuVertices[i].color = pts[i].color;
+    }
+    glBufferSubData(GL_ARRAY_BUFFER, 0, needed, gpuVertices.data());
 
     // Camera matrices
     float aspect = (float)viewportW / (float)viewportH;
@@ -149,6 +178,7 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     particleProg.use();
     particleProg.setMat4("uView", view);
     particleProg.setMat4("uProj", proj);
+    particleProg.setFloat("bloomThreshold", bloomThreshold);
     unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(2, attachments);
 
@@ -177,7 +207,7 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT);
     compositeProg.use();
-    compositeProg.setFloat("exposure", 1.2f);
+    compositeProg.setFloat("exposure", exposure);
     // crude lensing switch by module: we don't have module here; always off. Kept for future UI toggle.
     compositeProg.setInt("lensEnabled", 0);
     compositeProg.setVec3("dummy", glm::vec3(0)); // no-op to keep uniform location active if optimized

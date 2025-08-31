@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\Alvaro\Downloads\NeighborDog-main\cosmosengine\build\CMakeFiles\44e261284ecf5e4fe24e5d22331b7805\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{215C4A94-B882-3812-9660-47C0506A5E7A}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

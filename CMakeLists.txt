@@ -35,10 +35,12 @@ target_link_libraries(cosmosengine PRIVATE
     imgui::imgui
 )
 
-target_compile_definitions(cosmosengine PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD)
+target_compile_definitions(cosmosengine PRIVATE IMGUI_IMPL_OPENGL_LOADER_GLAD GLM_ENABLE_EXPERIMENTAL)
 
 if(MSVC AND COSMOS_ENABLE_WARNINGS)
     target_compile_options(cosmosengine PRIVATE /W4 /permissive- /Zc:preprocessor)
+    # Enable AVX2 for extra vectorization where possible
+    target_compile_options(cosmosengine PRIVATE /arch:AVX2)
 else()
     if(COSMOS_ENABLE_WARNINGS)
         target_compile_options(cosmosengine PRIVATE -Wall -Wextra -Wpedantic)
@@ -50,6 +52,15 @@ if(COSMOS_ENABLE_LTO)
     check_ipo_supported(RESULT lto_supported OUTPUT out)
     if(lto_supported)
         set_property(TARGET cosmosengine PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif()
+endif()
+
+# OpenMP (optional but beneficial)
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(cosmosengine PRIVATE OpenMP::OpenMP_CXX)
+    if(MSVC)
+        target_compile_options(cosmosengine PRIVATE /openmp:llvm)
     endif()
 endif()
 

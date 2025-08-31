@@ -81,13 +81,15 @@ int main() {
             camera.position += up * (float)dy * 0.5f;
         } else panning = false;
 
-        // Scroll zoom
-        static double lastScrollY = 0.0; // we'll query directly
-        // GLFW doesn't store delta; Poll via callback ideally. Using keys instead for simplicity
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.position += glm::vec3(0,0,-1) * 10.0f;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.position += glm::vec3(0,0,1) * 10.0f;
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.position += glm::vec3(-1,0,0) * 10.0f;
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.position += glm::vec3(1,0,0) * 10.0f;
+    // WASD in camera space
+    glm::vec3 forward = glm::normalize(glm::vec3(cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch), cosf(camera.pitch) * cosf(camera.yaw)));
+    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
+    glm::vec3 up = glm::normalize(glm::cross(right, forward));
+    float moveSpeed = 10.0f;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.position += forward * moveSpeed;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.position -= forward * moveSpeed;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.position -= right * moveSpeed;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.position += right * moveSpeed;
 
         // Update simulation
         sim.update(settings);
@@ -98,7 +100,7 @@ int main() {
         double dt = std::chrono::duration<double>(now - lastTime).count();
         lastTime = now;
         fps = 1.0 / (dt + 1e-6);
-        bool reset = ui.drawDock(settings, camera, (float)fps, sim.getParticles().size());
+    bool reset = ui.drawDock(settings, camera, (float)fps, sim.getParticles().size(), &renderer);
         if (reset) sim.reset(settings);
 
         // Render

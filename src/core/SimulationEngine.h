@@ -22,6 +22,7 @@ struct SimulationSettings {
     float theta = 0.7f;
     bool collisions = false;
     float restitution = 1.0f; // 1 elastic, <1 inelastic
+    int rebuildEveryN = 1; // build Barnes-Hut tree every N frames (1 = every frame)
 };
 
 class SimulationEngine {
@@ -37,6 +38,10 @@ private:
     std::vector<Particle> particles;
     BarnesHut bh;
     std::mt19937 rng;
+    // performance controls
+    int frameCounter = 0;
+    size_t lastParticleCount = 0;
+    BarnesHutParams lastBhParams{};
 
     void initGalaxy(int n);
     void initBlackHole(int n);

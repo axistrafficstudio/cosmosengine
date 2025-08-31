@@ -2,6 +2,7 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/norm.hpp>
 #include <algorithm>
+#include <unordered_map>
 
 SimulationEngine::SimulationEngine() : rng(std::random_device{}()) {}
 
@@ -59,27 +60,73 @@ void SimulationEngine::integrate(const SimulationSettings& s) {
 }
 
 void SimulationEngine::handleCollisions(float restitution) {
-    // naive O(n^2) for now; can be improved with spatial hashing
-    for (size_t i = 0; i < particles.size(); ++i) {
-        for (size_t j = i + 1; j < particles.size(); ++j) {
-            glm::vec3 r = particles[j].position - particles[i].position;
-            float dist2 = glm::length2(r);
-            float minDist = particles[i].radius + particles[j].radius;
-            if (dist2 < minDist * minDist) {
-                float dist = sqrtf(dist2) + 1e-8f;
-                glm::vec3 n = (dist > 0.0f) ? (r / dist) : glm::vec3(1,0,0);
-                float mi = particles[i].mass, mj = particles[j].mass;
-                glm::vec3 vi = particles[i].velocity;
-                glm::vec3 vj = particles[j].velocity;
-                float vi_n = glm::dot(vi, n);
-                float vj_n = glm::dot(vj, n);
-                float pi = (2.0f * (vi_n - vj_n)) / (mi + mj);
-                particles[i].velocity = vi - pi * mj * n * restitution;
-                particles[j].velocity = vj + pi * mi * n * restitution;
-                // separate
-                float overlap = minDist - dist;
-                particles[i].position -= n * (overlap * (mj / (mi + mj)));
-                particles[j].position += n * (overlap * (mi / (mi + mj)));
+    struct CellKey { int x,y,z; };
+    struct KeyHash {
+        size_t operator()(const CellKey& k) const noexcept {
+            // mix 3 ints into a size_t (64-bit friendly hash)
+            size_t h = (uint32_t)k.x * 73856093u ^ (uint32_t)k.y * 19349663u ^ (uint32_t)k.z * 83492791u;
+            return h;
+        }
+    };
+    struct KeyEq { bool operator()(const CellKey& a, const CellKey& b) const noexcept { return a.x==b.x && a.y==b.y && a.z==b.z; } };
+
+    if (particles.empty()) return;
+    // Choose cell size ~ 2x typical radius
+    float avgR = 0.0f; int sampleN = (int)std::min<size_t>(particles.size(), 256);
+    for (int i = 0; i < sampleN; ++i) avgR += particles[i].radius;
+    avgR = (sampleN > 0) ? (avgR / sampleN) : 1.0f;
+    const float cellSize = std::max(0.5f, avgR * 2.5f);
+    const float invCell = 1.0f / cellSize;
+
+    std::unordered_map<CellKey, std::vector<int>, KeyHash, KeyEq> grid;
+    grid.reserve(particles.size()*2);
+
+    auto cellOf = [&](const glm::vec3& p){
+        return CellKey{ (int)floorf(p.x * invCell), (int)floorf(p.y * invCell), (int)floorf(p.z * invCell) };
+    };
+
+    // Build grid
+    for (int i = 0; i < (int)particles.size(); ++i) {
+        CellKey key = cellOf(particles[i].position);
+        grid[key].push_back(i);
+    }
+
+    // Neighbor offsets (27 cells)
+    int offs[27][3]; int t=0; for(int dz=-1; dz<=1; ++dz) for(int dy=-1; dy<=1; ++dy) for(int dx=-1; dx<=1; ++dx){ offs[t][0]=dx; offs[t][1]=dy; offs[t][2]=dz; ++t; }
+
+    // Resolve collisions
+    for (const auto& kv : grid) {
+        const CellKey& c = kv.first;
+        for (int nbi = 0; nbi < 27; ++nbi) {
+            CellKey nb{ c.x + offs[nbi][0], c.y + offs[nbi][1], c.z + offs[nbi][2] };
+            auto it = grid.find(nb);
+            if (it == grid.end()) continue;
+            const auto& a = kv.second;
+            const auto& b = it->second;
+            for (int ii = 0; ii < (int)a.size(); ++ii) {
+                int i = a[ii];
+                int jjStart = (&a == &b) ? (ii+1) : 0;
+                for (int jj = jjStart; jj < (int)b.size(); ++jj) {
+                    int j = b[jj];
+                    glm::vec3 r = particles[j].position - particles[i].position;
+                    float minDist = particles[i].radius + particles[j].radius;
+                    float dist2 = glm::dot(r,r);
+                    if (dist2 < minDist * minDist) {
+                        float dist = sqrtf(std::max(dist2, 1e-12f));
+                        glm::vec3 n = (dist > 0.0f) ? (r / dist) : glm::vec3(1,0,0);
+                        float mi = particles[i].mass, mj = particles[j].mass;
+                        glm::vec3 vi = particles[i].velocity;
+                        glm::vec3 vj = particles[j].velocity;
+                        float vi_n = glm::dot(vi, n);
+                        float vj_n = glm::dot(vj, n);
+                        float pi = (2.0f * (vi_n - vj_n)) / (mi + mj);
+                        particles[i].velocity = vi - pi * mj * n * restitution;
+                        particles[j].velocity = vj + pi * mi * n * restitution;
+                        float overlap = minDist - dist;
+                        particles[i].position -= n * (overlap * (mj / (mi + mj)));
+                        particles[j].position += n * (overlap * (mi / (mi + mj)));
+                    }
+                }
             }
         }
     }

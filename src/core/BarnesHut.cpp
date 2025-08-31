@@ -60,11 +60,17 @@ std::unique_ptr<OctreeNode> BarnesHut::buildRecursive(const std::vector<Particle
     }
 
     bool allEmpty = true;
-    for (int i = 0; i < 8; ++i) {
-        if (!childIndices[i].empty()) {
-            node->children[i] = buildRecursive(particles, childBoxes[i], childIndices[i], depth + 1);
-            allEmpty = false;
-        }
+    // Collect work items to enable parallel build of independent children
+    struct Task { int idx; };
+    std::vector<Task> tasks; tasks.reserve(8);
+    for (int i = 0; i < 8; ++i) if (!childIndices[i].empty()) { tasks.push_back({i}); allEmpty = false; }
+
+    #pragma omp parallel for schedule(static) if(tasks.size() > 2)
+    for (int ti = 0; ti < (int)tasks.size(); ++ti) {
+        int i = tasks[ti].idx;
+        auto child = buildRecursive(particles, childBoxes[i], childIndices[i], depth + 1);
+        // publish
+        node->children[i] = std::move(child);
     }
 
     if (allEmpty) {

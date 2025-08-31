@@ -6,9 +6,11 @@
 
 struct Camera {
     glm::vec3 position{0.0f, 50.0f, 900.0f};
+    glm::vec3 target{0.0f, 0.0f, 0.0f};
     float pitch{-0.1f};
     float yaw{3.14f};
     float fov{60.0f};
+    float distance{900.0f};
 };
 
 class RenderingEngine {
@@ -23,6 +25,8 @@ public:
     void setBloomThreshold(float v) { bloomThreshold = v; }
     float getExposure() const { return exposure; }
     float getBloomThreshold() const { return bloomThreshold; }
+    void setBlurPasses(int p) { blurPasses = p; }
+    int getBlurPasses() const { return blurPasses; }
 
 private:
     struct GPUVertex {
@@ -34,6 +38,7 @@ private:
     unsigned int quadVAO = 0, quadVBO = 0;
     unsigned int hdrFBO = 0, colorTex = 0, brightTex = 0, depthRBO = 0;
     unsigned int pingpongFBO[2]{0,0}, pingpongTex[2]{0,0};
+    int pingW = 1, pingH = 1;
 
     ShaderProgram particleProg;
     ShaderProgram blurProg;
@@ -42,6 +47,7 @@ private:
     int viewportW = 1, viewportH = 1;
     float exposure = 1.2f;
     float bloomThreshold = 1.2f;
+    int blurPasses = 3;
     std::vector<GPUVertex> gpuVertices;
 
     void setupParticleBuffers(size_t maxParticles);

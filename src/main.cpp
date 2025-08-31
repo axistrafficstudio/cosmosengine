@@ -39,7 +39,7 @@ int main() {
 
     SimulationEngine sim;
     SimulationSettings settings;
-    settings.particleCount = 200000; // starting point
+    settings.particleCount = 80000; // cap enforced to 200k on reset
     sim.reset(settings);
 
     RenderingEngine renderer;
@@ -49,9 +49,9 @@ int main() {
     auto lastTime = std::chrono::high_resolution_clock::now();
     double fps = 0.0;
 
-    // Input state
+    // Input state (orbit camera)
     bool rotating = false; bool panning = false;
-    double lastX = 0, lastY = 0;
+    double lastX = 0, lastY = 0; double scrollAccum = 0.0;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -60,14 +60,13 @@ int main() {
         int fbw=0, fbh=0; glfwGetFramebufferSize(window, &fbw, &fbh);
         renderer.resize(fbw, fbh);
 
-        // Camera controls
+        // Orbit camera controls: RMB rotate around target, MMB pan target, wheel zoom
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
             double x,y; glfwGetCursorPos(window, &x,&y);
             if (!rotating) { rotating = true; lastX = x; lastY = y; }
             double dx = x - lastX, dy = y - lastY; lastX = x; lastY = y;
             camera.yaw += (float)dx * 0.005f;
-            camera.pitch += (float)dy * 0.005f;
-            camera.pitch = glm::clamp(camera.pitch, -1.5f, 1.5f);
+            camera.pitch = glm::clamp(camera.pitch + (float)dy * 0.005f, -1.5f, 1.5f);
         } else rotating = false;
 
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS) {
@@ -77,19 +76,19 @@ int main() {
             glm::vec3 forward = glm::vec3(cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch), cosf(camera.pitch) * cosf(camera.yaw));
             glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
             glm::vec3 up = glm::normalize(glm::cross(right, forward));
-            camera.position -= right * (float)dx * 0.5f;
-            camera.position += up * (float)dy * 0.5f;
+            camera.target -= right * (float)dx * 0.5f;
+            camera.target += up * (float)dy * 0.5f;
         } else panning = false;
 
-    // WASD in camera space
-    glm::vec3 forward = glm::normalize(glm::vec3(cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch), cosf(camera.pitch) * cosf(camera.yaw)));
-    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0,1,0)));
-    glm::vec3 up = glm::normalize(glm::cross(right, forward));
-    float moveSpeed = 10.0f;
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) camera.position += forward * moveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) camera.position -= forward * moveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) camera.position -= right * moveSpeed;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) camera.position += right * moveSpeed;
+        // Wheel zoom (approx): usar teclas como fallback
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) scrollAccum -= 2.0;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) scrollAccum += 2.0;
+        camera.distance = glm::clamp(camera.distance + (float)scrollAccum, 50.0f, 5000.0f);
+        scrollAccum *= 0.85; // decay
+
+        // Recompute position from orbit params
+        glm::vec3 dir = glm::normalize(glm::vec3(cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch), cosf(camera.pitch) * cosf(camera.yaw)));
+        camera.position = camera.target - dir * camera.distance;
 
         // Update simulation
         sim.update(settings);
@@ -101,6 +100,7 @@ int main() {
         lastTime = now;
         fps = 1.0 / (dt + 1e-6);
     bool reset = ui.drawDock(settings, camera, (float)fps, sim.getParticles().size(), &renderer);
+    if (settings.particleCount > 200000) settings.particleCount = 200000;
         if (reset) sim.reset(settings);
 
         // Render

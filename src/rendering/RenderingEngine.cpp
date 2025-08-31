@@ -38,8 +38,6 @@ bool RenderingEngine::init(int width, int height) {
     ensureFramebuffer();
 
     glEnable(GL_PROGRAM_POINT_SIZE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE);
 
     return true;
 }
@@ -60,6 +58,8 @@ RenderingEngine::~RenderingEngine() {
 }
 
 void RenderingEngine::resize(int width, int height) {
+    if (width <= 0 || height <= 0) return;
+    if (width == viewportW && height == viewportH) return;
     viewportW = width; viewportH = height;
     ensureFramebuffer();
 }
@@ -112,13 +112,15 @@ void RenderingEngine::ensureFramebuffer() {
     unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(2, attachments);
 
-    // pingpong buffers for blur
+    // pingpong buffers for blur (half resolution)
+    pingW = std::max(1, viewportW / 2);
+    pingH = std::max(1, viewportH / 2);
     for (int i = 0; i < 2; ++i) {
         if (!pingpongFBO[i]) glGenFramebuffers(1, &pingpongFBO[i]);
         if (!pingpongTex[i]) glGenTextures(1, &pingpongTex[i]);
         glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
         glBindTexture(GL_TEXTURE_2D, pingpongTex[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, viewportW, viewportH, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, pingW, pingH, 0, GL_RGBA, GL_FLOAT, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -183,25 +185,35 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     glDrawBuffers(2, attachments);
 
     glBindVertexArray(particleVAO);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
     glDrawArrays(GL_POINTS, 0, (GLsizei)pts.size());
+    glDisable(GL_BLEND);
     glBindVertexArray(0);
 
     glDisable(GL_DEPTH_TEST);
 
     // Bright pass already separated via shader (uses two outputs), now blur brightTex
     bool horizontal = true, first = true;
-    int blurPasses = 8;
     blurProg.use();
     blurProg.setInt("inputTex", 0);
-    for (int i = 0; i < blurPasses; ++i) {
+    int passes = glm::clamp(blurPasses, 0, 10);
+    for (int i = 0; i < passes; ++i) {
         glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
         blurProg.setInt("horizontal", horizontal ? 1 : 0);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, first ? brightTex : pingpongTex[!horizontal]);
+        if (first) {
+            // Downsample: render brightTex to half res target
+            glBindTexture(GL_TEXTURE_2D, brightTex);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, pingpongTex[!horizontal]);
+        }
+        glViewport(0, 0, pingW, pingH);
         drawFullscreenQuad();
         horizontal = !horizontal;
         if (first) first = false;
     }
+    glViewport(0, 0, viewportW, viewportH);
 
     // Composite
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -215,7 +227,7 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     glBindTexture(GL_TEXTURE_2D, colorTex);
     compositeProg.setInt("sceneTex", 0);
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, pingpongTex[!horizontal]);
+    glBindTexture(GL_TEXTURE_2D, first ? brightTex : pingpongTex[!horizontal]);
     compositeProg.setInt("bloomTex", 1);
     drawFullscreenQuad();
 }

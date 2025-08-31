@@ -1,0 +1,9 @@
+# These settings are intended for Windows + MSVC + vcpkg users.
+# If using another environment, adapt accordingly.
+
+cmake_minimum_required(VERSION 3.21)
+
+# Enable multi-config generators default to Release if unspecified
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()

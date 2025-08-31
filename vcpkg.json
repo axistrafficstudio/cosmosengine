@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cosmosengine",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "glfw3",
+    "glm",
+    "glad",
+    {
+      "name": "imgui",
+      "default-features": false,
+      "features": ["glfw-binding", "opengl3-binding"]
+    }
+  ]
+}

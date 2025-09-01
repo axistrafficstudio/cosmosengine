@@ -52,6 +52,7 @@ int main() {
     // Input state (orbit camera)
     bool rotating = false; bool panning = false;
     double lastX = 0, lastY = 0; double scrollAccum = 0.0;
+    float lastYaw = 0.0f;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -65,8 +66,13 @@ int main() {
             double x,y; glfwGetCursorPos(window, &x,&y);
             if (!rotating) { rotating = true; lastX = x; lastY = y; }
             double dx = x - lastX, dy = y - lastY; lastX = x; lastY = y;
+            float prevYaw = camera.yaw;
             camera.yaw += (float)dx * 0.005f;
             camera.pitch = glm::clamp(camera.pitch + (float)dy * 0.005f, -1.5f, 1.5f);
+            // rotate scene to keep visual lock (optional: only for BH)
+            if (settings.module == SimulationModule::BlackHole) {
+                sim.rotateAll(camera.yaw - prevYaw);
+            }
         } else rotating = false;
 
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS) {

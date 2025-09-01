@@ -80,13 +80,15 @@ void RenderingEngine::setupParticleBuffers(size_t maxParticles) {
     mappedCapacity = maxParticles * sizeof(GPUVertex);
     glBufferData(GL_ARRAY_BUFFER, mappedCapacity, nullptr, GL_DYNAMIC_DRAW);
 
-    // layout: position (vec3), radius (float), color(vec4)
+    // layout: position (vec3), radius (float), color(vec4), velocity(vec3), pad(float)
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, position));
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, radius));
     glEnableVertexAttribArray(2);
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, color));
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(GPUVertex), (void*)offsetof(GPUVertex, velocity));
     glBindVertexArray(0);
 }
 
@@ -183,6 +185,7 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
         gpuVertices[i].position = pts[i].position;
         gpuVertices[i].radius = pts[i].radius;
         gpuVertices[i].color = pts[i].color;
+        gpuVertices[i].velocity = pts[i].velocity;
     }
     glBufferSubData(GL_ARRAY_BUFFER, 0, needed, gpuVertices.data());
 
@@ -254,6 +257,10 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     compositeProg.setFloat("beamingStrength", beamingStrength);
     compositeProg.setVec3("diskInnerColor", diskInnerColor);
     compositeProg.setVec3("diskOuterColor", diskOuterColor);
+    compositeProg.setFloat("timeSec", timeElapsed);
+    compositeProg.setFloat("starDensity", starDensity);
+    compositeProg.setFloat("haloIntensity", haloIntensity);
+    compositeProg.setFloat("tailAngle", tailAngle);
     compositeProg.setFloat("diskInnerR", diskInnerR);
     compositeProg.setFloat("diskOuterR", diskOuterR);
     compositeProg.setFloat("diskTilt", diskTilt);
@@ -283,6 +290,10 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     compositeProg.setFloat("beamingStrength", beamingStrength);
     compositeProg.setVec3("diskInnerColor", diskInnerColor);
     compositeProg.setVec3("diskOuterColor", diskOuterColor);
+    compositeProg.setFloat("timeSec", timeElapsed);
+    compositeProg.setFloat("starDensity", starDensity);
+    compositeProg.setFloat("haloIntensity", haloIntensity);
+    compositeProg.setFloat("tailAngle", tailAngle);
     compositeProg.setFloat("diskInnerR", diskInnerR);
     compositeProg.setFloat("diskOuterR", diskOuterR);
     compositeProg.setFloat("diskTilt", diskTilt);

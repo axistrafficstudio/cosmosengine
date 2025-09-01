@@ -33,6 +33,8 @@ private:
         glm::vec3 position;
         float radius;
         glm::vec4 color;
+    glm::vec3 velocity;
+    float pad0;
     };
     unsigned int particleVAO = 0, particleVBO = 0;
     void* mappedPtr = nullptr;
@@ -75,6 +77,11 @@ private:
     float diskRotSpeed = 1.5f; // angular speed for streaks
     // Time
     double timeStart = 0.0;
+    float timeElapsed = 0.0f;
+    // Background and extra effects
+    float starDensity = 0.6f;
+    float haloIntensity = 0.8f;
+    float tailAngle = 0.6f; // radians, direction of matter tail
 
     void setupParticleBuffers(size_t maxParticles);
     void ensureFramebuffer();
@@ -112,4 +119,11 @@ public:
     float getDiskBrightness() const { return diskBrightness; }
     void setDiskRotSpeed(float w){ diskRotSpeed=w; }
     float getDiskRotSpeed() const { return diskRotSpeed; }
+    // Background & extras
+    void setStarDensity(float d){ starDensity=d; }
+    float getStarDensity() const { return starDensity; }
+    void setHaloIntensity(float h){ haloIntensity=h; }
+    float getHaloIntensity() const { return haloIntensity; }
+    void setTailAngle(float a){ tailAngle=a; }
+    float getTailAngle() const { return tailAngle; }
 };

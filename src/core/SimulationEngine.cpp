@@ -201,18 +201,30 @@ void SimulationEngine::initGalaxy(int n) {
 void SimulationEngine::initBlackHole(int n) {
     particles.resize(n);
     std::uniform_real_distribution<float> uni(0.0f, 1.0f);
-    float R = 400.0f;
+    std::normal_distribution<float> gauss(0.0f, 1.0f);
+    float ringR = 300.0f;        // radius of accretion ring
+    float ringWidth = 25.0f;     // radial thickness
+    float thickness = 8.0f;      // vertical thickness
     for (int i = 0; i < n; ++i) {
-        float r = R * sqrtf(uni(rng));
-        float theta = 2.0f * glm::pi<float>() * uni(rng);
-        float z = (uni(rng) - 0.5f) * 2.0f;
-        glm::vec3 pos(r * cosf(theta), z, r * sinf(theta));
-        glm::vec3 vel = glm::vec3(-sinf(theta), 0.0f, cosf(theta)) * sqrtf(1.0f / (r + 1.0f)) * 80.0f;
+        float t = uni(rng);
+        float theta = 2.0f * glm::pi<float>() * t;
+        float r = ringR + ringWidth * (uni(rng) - 0.5f);
+        float y = thickness * (uni(rng) - 0.5f);
+        glm::vec3 pos(r * cosf(theta), y, r * sinf(theta));
+        // tangential velocity proportional to 1/sqrt(r)
+        glm::vec3 tangent = glm::normalize(glm::vec3(-sinf(theta), 0.0f, cosf(theta)));
+        float speed = 180.0f * (1.0f / sqrtf(std::max(r, 1.0f)) * sqrtf(ringR));
+        glm::vec3 vel = tangent * speed;
+        // slight turbulence noise
+        vel += glm::vec3(gauss(rng), gauss(rng)*0.2f, gauss(rng)) * 2.0f;
+
         particles[i].position = pos;
         particles[i].velocity = vel;
-        particles[i].mass = 1.0f;
-        particles[i].radius = 0.5f;
-        particles[i].color = glm::vec4(1.0f, 0.9f, 0.6f, 1.0f);
+        particles[i].mass = 0.8f;
+        particles[i].radius = 0.6f;
+        float radialT = glm::clamp((r - (ringR-ringWidth)) / (2.0f*ringWidth), 0.0f, 1.0f);
+        glm::vec3 col = glm::mix(glm::vec3(1.0f,0.9f,0.6f), glm::vec3(1.0f,0.5f,0.2f), 1.0f - radialT);
+        particles[i].color = glm::vec4(col, 1.0f);
     }
     // central black hole (non-rendered via particle shader; renderer can add special effect)
     if (!particles.empty()) {
@@ -231,6 +243,17 @@ void SimulationEngine::applyBlackHoleEventHorizon() {
     particles.erase(std::remove_if(particles.begin()+1, particles.end(), [&](const Particle& p){
         return glm::length(p.position - bhole.position) < horizon;
     }), particles.end());
+}
+
+void SimulationEngine::rotateAll(float radians) {
+    float c = cosf(radians), s = sinf(radians);
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < (int)particles.size(); ++i) {
+        glm::vec3 p = particles[i].position;
+        particles[i].position = glm::vec3(c*p.x + s*p.z, p.y, -s*p.x + c*p.z);
+        glm::vec3 v = particles[i].velocity;
+        particles[i].velocity = glm::vec3(c*v.x + s*v.z, v.y, -s*v.x + c*v.z);
+    }
 }
 
 void SimulationEngine::initSupernova(int n) {

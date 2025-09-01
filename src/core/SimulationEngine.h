@@ -46,6 +46,7 @@ public:
 
     const std::vector<Particle>& getParticles() const { return particles; }
     std::vector<Particle>& getParticlesMutable() { return particles; }
+    void rotateAll(float radians);
 
 private:
     std::vector<Particle> particles;

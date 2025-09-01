@@ -17,7 +17,7 @@ class RenderingEngine {
 public:
     bool init(int width, int height);
     void resize(int width, int height);
-    void render(const SimulationEngine& sim, const Camera& camera, bool showVectors);
+    void render(const SimulationEngine& sim, const Camera& camera, bool showVectors, bool isBlackHoleModule);
     ~RenderingEngine();
 
     // Post-process controls
@@ -35,10 +35,16 @@ private:
         glm::vec4 color;
     };
     unsigned int particleVAO = 0, particleVBO = 0;
+    void* mappedPtr = nullptr;
+    size_t mappedCapacity = 0;
     unsigned int quadVAO = 0, quadVBO = 0;
     unsigned int hdrFBO = 0, colorTex = 0, brightTex = 0, depthRBO = 0;
     unsigned int pingpongFBO[2]{0,0}, pingpongTex[2]{0,0};
     int pingW = 1, pingH = 1;
+    // UI glass blur (quarter res)
+    unsigned int uiFBO[2]{0,0}, uiTex[2]{0,0};
+    int uiW = 1, uiH = 1;
+    int uiLastIndex = 0; // which uiTex currently holds last blur output
 
     ShaderProgram particleProg;
     ShaderProgram blurProg;
@@ -46,11 +52,44 @@ private:
 
     int viewportW = 1, viewportH = 1;
     float exposure = 1.2f;
-    float bloomThreshold = 1.2f;
+    float bloomThreshold = 0.6f;
     int blurPasses = 3;
+    int uiBlurPasses = 6;
     std::vector<GPUVertex> gpuVertices;
+
+    // Black hole lensing and ring parameters
+    bool lensingEnabled = false;
+    float lensStrength = 0.25f;  // warp intensity
+    float lensRadiusScale = 1.0f; // scale vs projected event horizon
+    float ringIntensity = 1.2f;
+    float ringWidth = 0.06f; // normalized to lens radius
+    float beamingStrength = 0.6f; // doppler-like boost
+    glm::vec3 diskInnerColor{1.2f, 0.6f, 0.2f};
+    glm::vec3 diskOuterColor{1.0f, 0.8f, 0.5f};
 
     void setupParticleBuffers(size_t maxParticles);
     void ensureFramebuffer();
     void drawFullscreenQuad();
+
+public:
+    // Expose for UI glass sampling
+    unsigned int getUIBlurTexture() const { return uiTex[uiLastIndex]; }
+    int getViewportWidth() const { return viewportW; }
+    int getViewportHeight() const { return viewportH; }
+    void setUIBlurPasses(int p) { uiBlurPasses = p; }
+    int getUIBlurPasses() const { return uiBlurPasses; }
+    // Black hole UI controls
+    void setLensStrength(float v){ lensStrength = v; }
+    float getLensStrength() const { return lensStrength; }
+    void setLensRadiusScale(float v){ lensRadiusScale = v; }
+    float getLensRadiusScale() const { return lensRadiusScale; }
+    void setRingIntensity(float v){ ringIntensity = v; }
+    float getRingIntensity() const { return ringIntensity; }
+    void setRingWidth(float v){ ringWidth = v; }
+    float getRingWidth() const { return ringWidth; }
+    void setBeamingStrength(float v){ beamingStrength = v; }
+    float getBeamingStrength() const { return beamingStrength; }
+    void setDiskColors(const glm::vec3& inner, const glm::vec3& outer){ diskInnerColor=inner; diskOuterColor=outer; }
+    glm::vec3 getDiskInnerColor() const { return diskInnerColor; }
+    glm::vec3 getDiskOuterColor() const { return diskOuterColor; }
 };

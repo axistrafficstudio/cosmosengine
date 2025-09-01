@@ -90,6 +90,39 @@ int main() {
         glm::vec3 dir = glm::normalize(glm::vec3(cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch), cosf(camera.pitch) * cosf(camera.yaw)));
         camera.position = camera.target - dir * camera.distance;
 
+        // Map left-click to world position near camera target plane
+        double mx, my; glfwGetCursorPos(window, &mx, &my);
+        int ww, hh; glfwGetWindowSize(window, &ww, &hh);
+        bool lmb = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+        settings.toolEngaged = lmb;
+        if (lmb) {
+            // Convert mouse to NDC
+            float x = (float)((mx / ww) * 2.0 - 1.0);
+            float y = (float)((1.0 - my / hh) * 2.0 - 1.0);
+            // Build ray in view space
+            float aspect = (float)ww / (float)hh;
+            glm::mat4 proj = glm::perspective(glm::radians(camera.fov), aspect, 0.1f, 5000.0f);
+            glm::vec3 fwd = glm::normalize(glm::vec3(cosf(camera.pitch) * sinf(camera.yaw), sinf(camera.pitch), cosf(camera.pitch) * cosf(camera.yaw)));
+            glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0,1,0)));
+            glm::vec3 up = glm::normalize(glm::cross(right, fwd));
+            glm::mat4 view = glm::lookAt(camera.position, camera.position + fwd, up);
+            glm::mat4 invVP = glm::inverse(proj * view);
+            glm::vec4 p0 = invVP * glm::vec4(x, y, -1.0f, 1.0f);
+            glm::vec4 p1 = invVP * glm::vec4(x, y,  1.0f, 1.0f);
+            p0 /= p0.w; p1 /= p1.w;
+            glm::vec3 rayO = glm::vec3(p0);
+            glm::vec3 rayD = glm::normalize(glm::vec3(p1 - p0));
+            // Intersect with plane through camera.target with normal = up x right (i.e., plane perpendicular to forward)
+            glm::vec3 planeN = fwd; // plane facing camera
+            float denom = glm::dot(planeN, rayD);
+            glm::vec3 hit = camera.target;
+            if (fabsf(denom) > 1e-4f) {
+                float t = glm::dot(camera.target - rayO, planeN) / denom;
+                if (t > 0.0f) hit = rayO + rayD * t; else hit = camera.target;
+            }
+            settings.toolWorld = hit;
+        }
+
         // Update simulation
         sim.update(settings);
 
@@ -103,8 +136,17 @@ int main() {
     if (settings.particleCount > 200000) settings.particleCount = 200000;
         if (reset) sim.reset(settings);
 
-        // Render
-        renderer.render(sim, camera, false);
+    // Render (enable lensing when module is BlackHole)
+    bool isBH = (settings.module == SimulationModule::BlackHole);
+    renderer.render(sim, camera, false, isBH);
+
+        // Draw indicator for tool
+        if (settings.toolEngaged && settings.tool != InteractionTool::None) {
+            ImGui::SetNextWindowBgAlpha(0.3f);
+            ImGui::Begin("Interaccion", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs);
+            ImGui::Text("(%.1f, %.1f, %.1f)", settings.toolWorld.x, settings.toolWorld.y, settings.toolWorld.z);
+            ImGui::End();
+        }
 
         ui.endFrame();
         glfwSwapBuffers(window);

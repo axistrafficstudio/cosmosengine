@@ -6,7 +6,7 @@ in VS_OUT {
     vec4 color;
 } fs_in;
 
-uniform float bloomThreshold = 1.2;
+uniform float bloomThreshold = 0.6;
 
 void main() {
     // circular point

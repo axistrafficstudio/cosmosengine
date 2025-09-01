@@ -43,6 +43,11 @@ bool RenderingEngine::init(int width, int height) {
 }
 
 RenderingEngine::~RenderingEngine() {
+    if (particleVBO && mappedPtr) {
+        glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
+        glUnmapBuffer(GL_ARRAY_BUFFER);
+        mappedPtr = nullptr;
+    }
     if (particleVBO) glDeleteBuffers(1, &particleVBO);
     if (particleVAO) glDeleteVertexArrays(1, &particleVAO);
     if (quadVBO) glDeleteBuffers(1, &quadVBO);
@@ -70,7 +75,10 @@ void RenderingEngine::setupParticleBuffers(size_t maxParticles) {
 
     glBindVertexArray(particleVAO);
     glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
-    glBufferData(GL_ARRAY_BUFFER, maxParticles * sizeof(GPUVertex), nullptr, GL_DYNAMIC_DRAW);
+    // Use dynamic draw with glBufferData; stable across drivers
+    mappedPtr = nullptr;
+    mappedCapacity = maxParticles * sizeof(GPUVertex);
+    glBufferData(GL_ARRAY_BUFFER, mappedCapacity, nullptr, GL_DYNAMIC_DRAW);
 
     // layout: position (vec3), radius (float), color(vec4)
     glEnableVertexAttribArray(0);
@@ -128,6 +136,23 @@ void RenderingEngine::ensureFramebuffer() {
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongTex[i], 0);
     }
 
+    // UI blur buffers (quarter resolution of full viewport)
+    uiW = std::max(1, viewportW / 4);
+    uiH = std::max(1, viewportH / 4);
+    for (int i = 0; i < 2; ++i) {
+        if (!uiFBO[i]) glGenFramebuffers(1, &uiFBO[i]);
+        if (!uiTex[i]) glGenTextures(1, &uiTex[i]);
+        glBindFramebuffer(GL_FRAMEBUFFER, uiFBO[i]);
+        glBindTexture(GL_TEXTURE_2D, uiTex[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, uiW, uiH, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, uiTex[i], 0);
+    }
+    uiLastIndex = 0;
+
     // Check completeness
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -142,15 +167,14 @@ void RenderingEngine::drawFullscreenQuad() {
     glBindVertexArray(0);
 }
 
-void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, bool showVectors) {
+void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, bool showVectors, bool isBlackHoleModule) {
     const auto& pts = sim.getParticles();
     if (pts.empty()) return;
 
-    // Resize particle buffer if needed and upload compact GPU data
+    // Resize if needed and upload compact GPU data
     glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
-    GLint size = 0; glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
     size_t needed = pts.size() * sizeof(GPUVertex);
-    if ((size_t)size < needed) {
+    if (needed > mappedCapacity) {
         setupParticleBuffers(pts.size());
         glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
     }
@@ -174,7 +198,7 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     glViewport(0, 0, viewportW, viewportH);
     glClearColor(0.0f, 0.0f, 0.02f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
 
     // Render particles to MRT: color and bright
     particleProg.use();
@@ -220,9 +244,16 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     glClear(GL_COLOR_BUFFER_BIT);
     compositeProg.use();
     compositeProg.setFloat("exposure", exposure);
-    // crude lensing switch by module: we don't have module here; always off. Kept for future UI toggle.
-    compositeProg.setInt("lensEnabled", 0);
-    compositeProg.setVec3("dummy", glm::vec3(0)); // no-op to keep uniform location active if optimized
+    // control black hole lensing + accretion ring shading
+    lensingEnabled = isBlackHoleModule;
+    compositeProg.setInt("lensEnabled", lensingEnabled ? 1 : 0);
+    compositeProg.setFloat("lensStrength", lensStrength);
+    compositeProg.setFloat("lensRadiusScale", lensRadiusScale);
+    compositeProg.setFloat("ringIntensity", ringIntensity);
+    compositeProg.setFloat("ringWidth", ringWidth);
+    compositeProg.setFloat("beamingStrength", beamingStrength);
+    compositeProg.setVec3("diskInnerColor", diskInnerColor);
+    compositeProg.setVec3("diskOuterColor", diskOuterColor);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);
     compositeProg.setInt("sceneTex", 0);
@@ -230,4 +261,46 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     glBindTexture(GL_TEXTURE_2D, first ? brightTex : pingpongTex[!horizontal]);
     compositeProg.setInt("bloomTex", 1);
     drawFullscreenQuad();
+
+    // Produce blurred backdrop for glass UI at quarter resolution
+    // 1) Render composite into uiTex[0]
+    glBindFramebuffer(GL_FRAMEBUFFER, uiFBO[0]);
+    glViewport(0, 0, uiW, uiH);
+    glClear(GL_COLOR_BUFFER_BIT);
+    compositeProg.use();
+    compositeProg.setFloat("exposure", exposure);
+    compositeProg.setInt("lensEnabled", lensingEnabled ? 1 : 0);
+    compositeProg.setFloat("lensStrength", lensStrength);
+    compositeProg.setFloat("lensRadiusScale", lensRadiusScale);
+    compositeProg.setFloat("ringIntensity", ringIntensity);
+    compositeProg.setFloat("ringWidth", ringWidth);
+    compositeProg.setFloat("beamingStrength", beamingStrength);
+    compositeProg.setVec3("diskInnerColor", diskInnerColor);
+    compositeProg.setVec3("diskOuterColor", diskOuterColor);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, colorTex);
+    compositeProg.setInt("sceneTex", 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, first ? brightTex : pingpongTex[!horizontal]);
+    compositeProg.setInt("bloomTex", 1);
+    drawFullscreenQuad();
+
+    // 2) Blur ping-pong on uiTex
+    bool h2 = true, first2 = true;
+    blurProg.use();
+    blurProg.setInt("inputTex", 0);
+    int passes2 = glm::clamp(uiBlurPasses, 0, 12);
+    for (int i = 0; i < passes2; ++i) {
+        glBindFramebuffer(GL_FRAMEBUFFER, uiFBO[h2]);
+        blurProg.setInt("horizontal", h2 ? 1 : 0);
+        glActiveTexture(GL_TEXTURE0);
+        if (first2) glBindTexture(GL_TEXTURE_2D, uiTex[0]); else glBindTexture(GL_TEXTURE_2D, uiTex[!h2]);
+        glViewport(0, 0, uiW, uiH);
+        drawFullscreenQuad();
+        h2 = !h2;
+        if (first2) first2 = false;
+    }
+    uiLastIndex = first2 ? 0 : (!h2);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, viewportW, viewportH);
 }

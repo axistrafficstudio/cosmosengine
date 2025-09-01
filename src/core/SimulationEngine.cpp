@@ -40,10 +40,52 @@ void SimulationEngine::update(const SimulationSettings& s) {
         particles[i].force = particles[i].mass * bh.computeForce(i, particles);
     }
 
+    // interactive tool
+    if (s.toolEngaged && s.tool != InteractionTool::None && s.toolRadius > 0.0f) {
+        applyInteractiveTool(s);
+    }
+
     integrate(s);
     if (s.collisions) handleCollisions(s.restitution);
     if (s.module == SimulationModule::BlackHole) applyBlackHoleEventHorizon();
     ++frameCounter;
+}
+
+void SimulationEngine::applyInteractiveTool(const SimulationSettings& s) {
+    const glm::vec3 center = s.toolWorld;
+    const float radius = s.toolRadius;
+    const float r2 = radius * radius;
+    const float k = s.toolStrength;
+
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < (int)particles.size(); ++i) {
+        Particle& p = particles[i];
+        glm::vec3 d = center - p.position;
+        float dist2 = glm::dot(d, d) + 1e-6f;
+        if (dist2 > r2) continue;
+        float dist = sqrtf(dist2);
+        glm::vec3 n = d / dist;
+        glm::vec3 f(0.0f);
+        switch (s.tool) {
+            case InteractionTool::Attract:
+                f = n * (k * p.mass / dist2);
+                break;
+            case InteractionTool::Repel:
+                f = -n * (fabsf(k) * p.mass / dist2);
+                break;
+            case InteractionTool::Drag: {
+                float springK = fabsf(k);
+                glm::vec3 spring = springK * (center - p.position);
+                glm::vec3 damping = -0.5f * springK * p.velocity;
+                f = spring + damping;
+            } break;
+            default: break;
+        }
+        float t = 1.0f - (dist / radius);
+        t = glm::clamp(t, 0.0f, 1.0f);
+        f *= t * t;
+        p.force += f;
+    }
 }
 
 void SimulationEngine::integrate(const SimulationSettings& s) {

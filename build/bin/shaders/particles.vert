@@ -12,7 +12,7 @@ uniform mat4 uProj;
 // simple size attenuation by distance to avoid giant points near camera
 float attenuate(float base, float dist){
     float s = base / (1.0 + 0.001 * dist);
-    return clamp(s, 1.0, 8.0);
+    return clamp(s, 2.5, 14.0);
 }
 
 void main() {
@@ -20,6 +20,6 @@ void main() {
     vec4 viewPos = uView * worldPos;
     gl_Position = uProj * viewPos;
     float dist = length(viewPos.xyz);
-    gl_PointSize = attenuate(inRadius * 2.0, dist);
+    gl_PointSize = attenuate(inRadius * 6.0, dist);
     vs_out.color = inColor;
 }

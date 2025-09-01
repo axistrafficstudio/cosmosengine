@@ -12,6 +12,13 @@ enum class SimulationModule {
     Interactions
 };
 
+enum class InteractionTool {
+    None,
+    Attract,
+    Repel,
+    Drag
+};
+
 struct SimulationSettings {
     SimulationModule module = SimulationModule::Galaxy;
     int particleCount = 100000; // start with 100k; scalable
@@ -23,6 +30,12 @@ struct SimulationSettings {
     bool collisions = false;
     float restitution = 1.0f; // 1 elastic, <1 inelastic
     int rebuildEveryN = 1; // build Barnes-Hut tree every N frames (1 = every frame)
+    // Interactive tools
+    InteractionTool tool = InteractionTool::None;
+    glm::vec3 toolWorld{0.0f};
+    float toolRadius = 50.0f;
+    float toolStrength = 1000.0f; // positive attracts, negative repels
+    bool toolEngaged = false; // set true while mouse is held down
 };
 
 class SimulationEngine {
@@ -50,4 +63,5 @@ private:
     void integrate(const SimulationSettings& settings);
     void handleCollisions(float restitution);
     void applyBlackHoleEventHorizon();
+    void applyInteractiveTool(const SimulationSettings& settings);
 };

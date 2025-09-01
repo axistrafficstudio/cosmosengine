@@ -254,6 +254,12 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     compositeProg.setFloat("beamingStrength", beamingStrength);
     compositeProg.setVec3("diskInnerColor", diskInnerColor);
     compositeProg.setVec3("diskOuterColor", diskOuterColor);
+    compositeProg.setFloat("diskInnerR", diskInnerR);
+    compositeProg.setFloat("diskOuterR", diskOuterR);
+    compositeProg.setFloat("diskTilt", diskTilt);
+    compositeProg.setFloat("diskPA", diskPA);
+    compositeProg.setFloat("diskBrightness", diskBrightness);
+    compositeProg.setFloat("diskRotSpeed", diskRotSpeed);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);
     compositeProg.setInt("sceneTex", 0);
@@ -277,6 +283,12 @@ void RenderingEngine::render(const SimulationEngine& sim, const Camera& cam, boo
     compositeProg.setFloat("beamingStrength", beamingStrength);
     compositeProg.setVec3("diskInnerColor", diskInnerColor);
     compositeProg.setVec3("diskOuterColor", diskOuterColor);
+    compositeProg.setFloat("diskInnerR", diskInnerR);
+    compositeProg.setFloat("diskOuterR", diskOuterR);
+    compositeProg.setFloat("diskTilt", diskTilt);
+    compositeProg.setFloat("diskPA", diskPA);
+    compositeProg.setFloat("diskBrightness", diskBrightness);
+    compositeProg.setFloat("diskRotSpeed", diskRotSpeed);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, colorTex);
     compositeProg.setInt("sceneTex", 0);

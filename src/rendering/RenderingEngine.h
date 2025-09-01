@@ -66,6 +66,15 @@ private:
     float beamingStrength = 0.6f; // doppler-like boost
     glm::vec3 diskInnerColor{1.2f, 0.6f, 0.2f};
     glm::vec3 diskOuterColor{1.0f, 0.8f, 0.5f};
+    // Accretion disk shape/orientation
+    float diskInnerR = 0.6f;   // in units of lensRadius
+    float diskOuterR = 1.6f;
+    float diskTilt = 0.6f;     // 0..0.9 (0 = face-on)
+    float diskPA = 0.0f;       // radians rotation
+    float diskBrightness = 1.0f;
+    float diskRotSpeed = 1.5f; // angular speed for streaks
+    // Time
+    double timeStart = 0.0;
 
     void setupParticleBuffers(size_t maxParticles);
     void ensureFramebuffer();
@@ -92,4 +101,15 @@ public:
     void setDiskColors(const glm::vec3& inner, const glm::vec3& outer){ diskInnerColor=inner; diskOuterColor=outer; }
     glm::vec3 getDiskInnerColor() const { return diskInnerColor; }
     glm::vec3 getDiskOuterColor() const { return diskOuterColor; }
+    void setDiskRadii(float innerR, float outerR){ diskInnerR=innerR; diskOuterR=outerR; }
+    float getDiskInnerR() const { return diskInnerR; }
+    float getDiskOuterR() const { return diskOuterR; }
+    void setDiskTilt(float t){ diskTilt=t; }
+    float getDiskTilt() const { return diskTilt; }
+    void setDiskPA(float a){ diskPA=a; }
+    float getDiskPA() const { return diskPA; }
+    void setDiskBrightness(float b){ diskBrightness=b; }
+    float getDiskBrightness() const { return diskBrightness; }
+    void setDiskRotSpeed(float w){ diskRotSpeed=w; }
+    float getDiskRotSpeed() const { return diskRotSpeed; }
 };
